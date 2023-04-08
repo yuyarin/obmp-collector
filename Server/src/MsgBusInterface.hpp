@@ -213,6 +213,19 @@ public:
         std::string cluster_list;
 
         char        originator_id[16];      ///< Originator ID in printed form
+
+        /**
+         * SRv6 L3 Service SID Information
+         */
+        std::string srv6_sid_value;
+        uint8_t srv6_service_sid_flags;
+        std::string srv6_endpoint_behavior;
+        uint8_t srv6_locator_block_length;
+        uint8_t srv6_locator_node_length;
+        uint8_t srv6_function_length;
+        uint8_t srv6_argument_length;
+        uint8_t srv6_transposition_length;
+        uint8_t srv6_transposition_offset;
     };
 
     /// Base attribute action codes
@@ -244,9 +257,15 @@ public:
         std::string     rd_assigned_number;
         uint8_t         rd_type;
     };
+
+    // Rib extended with SRv6 Service SID
+    struct obj_srv6_l3vpn_rib {
+        std::string     srv6_sid_next_hop;
+        std::string     srv6_endpoint_behavior;
+    };
     
     /// Rib extended with vpn specific fields
-    struct obj_vpn: obj_rib, obj_route_distinguisher {
+    struct obj_vpn: obj_rib, obj_route_distinguisher, obj_srv6_l3vpn_rib {
         // inherit
     };
 

@@ -190,8 +190,9 @@ private:
      * \details This method will update the database for the supplied path attributes
      *
      * \param  attrs            Reference to the parsed attributes map
+     * \param  attr_prefix_sid  Reference to the parsed BGP Prefix-SID attribute
      */
-    void UpdateDBAttrs(bgp_msg::UpdateMsg::parsed_attrs_map &attrs);
+    void UpdateDBAttrs(bgp_msg::UpdateMsg::parsed_attrs_map &attrs, bgp_msg::UpdateMsg::parsed_data_prefix_sid &attr_prefix_sid);
 
     /**
      * Update the Database advertised prefixes
@@ -217,11 +218,13 @@ private:
      *
      * \details This method will update the database for the supplied advertised prefixes
      *
-     * \param [in] remove       True if the records should be deleted, false if they are to be added/updated
-     * \param [in] adv_vpn      Reference to the list<vpn_tuple> of advertised vpns
-     * \param [in] attrs        Reference to the parsed attributes map
+     * \param [in] remove          True if the records should be deleted, false if they are to be added/updated
+     * \param [in] adv_vpn         Reference to the list<vpn_tuple> of advertised vpns
+     * \param [in] attrs           Reference to the parsed attributes map
+     * \param [in] attr_prefix_sid Reference to the parsed BGP Prefix-SID attribute
      */ 
-    void UpdateDBL3Vpn(bool remove, std::list<bgp::vpn_tuple> &adv_vpn, bgp_msg::UpdateMsg::parsed_attrs_map &attrs);
+    void UpdateDBL3Vpn(bool remove, std::list<bgp::vpn_tuple> &adv_vpn, bgp_msg::UpdateMsg::parsed_attrs_map &attrs,
+                       bgp_msg::UpdateMsg::parsed_data_prefix_sid &attr_prefix_sid);
 
     /**
      * Updates for either advertised or withdrawn Evpn NLRI's
@@ -244,7 +247,7 @@ private:
     void UpdateDbBgpLs(bool remove, bgp_msg::UpdateMsg::parsed_data_ls ls_data,
                                  bgp_msg::UpdateMsg::parsed_ls_attrs_map &ls_attrs);
 
-
+    const char* endpoint_behavior_str(uint16_t code);
 };
 
 #endif /* PARSEBGP_H_ */

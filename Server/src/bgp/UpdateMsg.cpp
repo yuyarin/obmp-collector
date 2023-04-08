@@ -18,6 +18,7 @@
 #include "MPReachAttr.h"
 #include "MPUnReachAttr.h"
 #include "MPLinkStateAttr.h"
+#include "BGPPrefixSID.h"
 
 namespace bgp_msg {
 
@@ -73,7 +74,7 @@ size_t UpdateMsg::parseUpdateMsg(u_char *data, size_t size, parsed_update_data &
     parsed_data.advertised.clear();
     parsed_data.attrs.clear();
     parsed_data.withdrawn.clear();
-
+    parsed_data.attr_prefix_sid.clear();
 
     /* ---------------------------------------------------------
      * Parse and setup the update header struct
@@ -513,6 +514,12 @@ void UpdateMsg::parseAttrData(u_char attr_type, uint16_t attr_len, u_char *data,
                 parsed_data.attrs[ATTR_TYPE_LARGE_COMMUNITY] = decodeStr;
             }
 
+            break;
+        }
+
+        case ATTR_TYPE_BGP_PREFIX_SID: {
+            BGPPrefixSID bps(logger, peer_addr, peer_info, debug);
+            bps.parseBGPPrefixSIDAttr(attr_len, data, parsed_data);
             break;
         }
 

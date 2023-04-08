@@ -20,6 +20,7 @@
 #include <array>
 #include <map>
 #include <bmp/BMPReader.h>
+#include <boost/property_tree/ptree.hpp>
 
 namespace bgp_msg {
 /**
@@ -55,6 +56,8 @@ enum UPDATE_ATTR_TYPES {
             ATTR_TYPE_BGP_LS=29,                    // BGP LS attribute draft-ietf-idr-ls-distribution
 
             ATTR_TYPE_LARGE_COMMUNITY=32,
+
+            ATTR_TYPE_BGP_PREFIX_SID=40,            ///< RFC8669 BGP Prefix-SID
 
             ATTR_TYPE_BGP_LINK_STATE_OLD=99,        // BGP link state Older
             ATTR_TYPE_BGP_ATTRIBUTE_SET=128,
@@ -132,6 +135,11 @@ public:
     };
 
     /**
+     * Parsed data structure for BGP Prefix-SID (TLV)
+     */
+    typedef boost::property_tree::ptree parsed_data_prefix_sid;
+
+    /**
      * Parsed update data - decoded data from complete update parse
      */
     struct parsed_update_data {
@@ -141,6 +149,7 @@ public:
         parsed_ls_attrs_map           ls_attrs;           ///< BGP-LS specific attributes
         parsed_data_ls                ls;                 ///< REACH: Link state parsed data
         parsed_data_ls                ls_withdrawn;       ///< UNREACH: Parsed Withdrawn data
+        parsed_data_prefix_sid        attr_prefix_sid;    ///< BGP Prefix-SID Attr TLV 
         std::list<bgp::vpn_tuple>     vpn;                ///< List of vpn prefixes advertised
         std::list<bgp::vpn_tuple>     vpn_withdrawn;      ///< List of vpn prefixes withdrawn
         std::list<bgp::evpn_tuple>    evpn;               ///< List of evpn nlris advertised

@@ -733,6 +733,17 @@ void msgBus_kafka::update_baseAttribute(obj_bgp_peer &peer, obj_path_attr &attr,
     hash.update((unsigned char *) attr.ext_community_list.c_str(), attr.ext_community_list.length());
     hash.update((unsigned char *) p_hash_str.c_str(), p_hash_str.length());
 
+    hash.update((unsigned char *) attr.srv6_sid_value.c_str(), attr.srv6_sid_value.length());
+    hash.update((unsigned char *) &attr.srv6_service_sid_flags, sizeof(attr.srv6_service_sid_flags));
+    hash.update((unsigned char *) attr.srv6_endpoint_behavior.c_str(), attr.srv6_endpoint_behavior.length());
+
+    hash.update((unsigned char *) &attr.srv6_locator_block_length, sizeof(attr.srv6_locator_block_length));
+    hash.update((unsigned char *) &attr.srv6_locator_node_length,  sizeof(attr.srv6_locator_node_length));
+    hash.update((unsigned char *) &attr.srv6_function_length,      sizeof(attr.srv6_function_length));
+    hash.update((unsigned char *) &attr.srv6_argument_length,      sizeof(attr.srv6_argument_length));
+    hash.update((unsigned char *) &attr.srv6_transposition_length, sizeof(attr.srv6_transposition_length));
+    hash.update((unsigned char *) &attr.srv6_transposition_offset, sizeof(attr.srv6_transposition_offset));
+
     hash.finalize();
 
     // Save the hash
@@ -748,13 +759,16 @@ void msgBus_kafka::update_baseAttribute(obj_bgp_peer &peer, obj_path_attr &attr,
     buf_len =
             snprintf(prep_buf, MSGBUS_WORKING_BUF_SIZE,
                      "add\t%" PRIu64 "\t%s\t%s\t%s\t%s\t%s\t%" PRIu32 "\t%s\t%s\t%s\t%" PRIu16 "\t%" PRIu32
-                             "\t%s\t%" PRIu32 "\t%" PRIu32 "\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
+                             "\t%s\t%" PRIu32 "\t%" PRIu32 "\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s"
+                             "\t%s\t%" PRIu8 "\t%s\t%" PRIu8 "\t%" PRIu8 "\t%" PRIu8 "\t%" PRIu8 "\t%" PRIu8 "\t%" PRIu8 "\n",
                      base_attr_seq, path_hash_str.c_str(), r_hash_str.c_str(), router_ip.c_str(), p_hash_str.c_str(),
                      peer.peer_addr,peer.peer_as, ts.c_str(),
                      attr.origin, attr.as_path.c_str(), attr.as_path_count, attr.origin_as, attr.next_hop, attr.med,
                      attr.local_pref, attr.aggregator, attr.community_list.c_str(), attr.ext_community_list.c_str(), attr.cluster_list.c_str(),
-                     attr.atomic_agg, attr.nexthop_isIPv4, attr.originator_id,attr.large_community_list.c_str());
-
+                     attr.atomic_agg, attr.nexthop_isIPv4, attr.originator_id,attr.large_community_list.c_str(),
+                     attr.srv6_sid_value.c_str(), attr.srv6_service_sid_flags, attr.srv6_endpoint_behavior.c_str(),
+                     attr.srv6_locator_block_length, attr.srv6_locator_node_length, attr.srv6_function_length,
+                     attr.srv6_argument_length, attr.srv6_transposition_length, attr.srv6_transposition_offset);
     produce(MSGBUS_TOPIC_VAR_BASE_ATTRIBUTE, prep_buf, buf_len, 1, p_hash_str, &peer_list[p_hash_str], peer.peer_as);
 
     ++base_attr_seq;
@@ -845,7 +859,7 @@ void msgBus_kafka::update_L3Vpn(obj_bgp_peer &peer, std::vector<obj_vpn> &vpn,
                 buf_len += snprintf(buf2, sizeof(buf2),
                                     "add\t%" PRIu64 "\t%s\t%s\t%s\t%s\t%s\t%s\t%" PRIu32 "\t%s\t%s\t%d\t%d\t%s\t%s\t%" PRIu16
                                             "\t%" PRIu32 "\t%s\t%" PRIu32 "\t%" PRIu32 "\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%" PRIu32
-                                            "\t%s\t%d\t%d\t%s:%s\t%d\t%s\n",
+                                            "\t%s\t%d\t%d\t%s:%s\t%d\t%s\tXXXX\t%s\n",
                                     l3vpn_seq, vpn_hash_str.c_str(), r_hash_str.c_str(),
                                     router_ip.c_str(),path_hash_str.c_str(), p_hash_str.c_str(),
                                     peer.peer_addr, peer.peer_as, ts.c_str(), vpn[i].prefix, vpn[i].prefix_len,
@@ -856,8 +870,8 @@ void msgBus_kafka::update_L3Vpn(obj_bgp_peer &peer, std::vector<obj_vpn> &vpn,
                                     attr->atomic_agg, attr->nexthop_isIPv4,
                                     attr->originator_id, vpn[i].path_id, vpn[i].labels, peer.isPrePolicy, peer.isAdjIn,
                                     vpn[i].rd_administrator_subfield.c_str(), vpn[i].rd_assigned_number.c_str(), vpn[i].rd_type,
-                                    attr->large_community_list.c_str());
-
+                                    attr->large_community_list.c_str(), vpn[i].srv6_sid_next_hop.c_str());
+                
                 break;
 
             case VPN_ACTION_DEL:

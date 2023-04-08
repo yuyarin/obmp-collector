@@ -24,6 +24,11 @@
 #include <sstream>
 #include <algorithm>
 
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/optional.hpp>
+
 #include "MsgBusInterface.hpp"
 #include "NotificationMsg.h"
 #include "OpenMsg.h"
@@ -350,7 +355,7 @@ void parseBGP::UpdateDB(bgp_msg::UpdateMsg::parsed_update_data &parsed_data) {
     /*
      * Update the path attributes
      */
-    UpdateDBAttrs(parsed_data.attrs);
+    UpdateDBAttrs(parsed_data.attrs, parsed_data.attr_prefix_sid);
 
     /*
      * Update the bgp-ls data
@@ -363,8 +368,8 @@ void parseBGP::UpdateDB(bgp_msg::UpdateMsg::parsed_update_data &parsed_data) {
      */
     UpdateDBAdvPrefixes(parsed_data.advertised, parsed_data.attrs);
 
-    UpdateDBL3Vpn(false,parsed_data.vpn, parsed_data.attrs);
-    UpdateDBL3Vpn(true,parsed_data.vpn_withdrawn, parsed_data.attrs);
+    UpdateDBL3Vpn(false,parsed_data.vpn, parsed_data.attrs, parsed_data.attr_prefix_sid);
+    UpdateDBL3Vpn(true,parsed_data.vpn_withdrawn, parsed_data.attrs, parsed_data.attr_prefix_sid);
 
     UpdateDBeVPN(false, parsed_data.evpn, parsed_data.attrs);
     UpdateDBeVPN(true, parsed_data.evpn_withdrawn, parsed_data.attrs);
@@ -382,8 +387,10 @@ void parseBGP::UpdateDB(bgp_msg::UpdateMsg::parsed_update_data &parsed_data) {
  * \details This method will update the database for the supplied path attributes
  *
  * \param  attrs            Reference to the parsed attributes map
+ * \param  attr_prefix_sid  Reference to the parsed BGP Prefix-SID attribute
  */
-void parseBGP::UpdateDBAttrs(bgp_msg::UpdateMsg::parsed_attrs_map &attrs) {
+void parseBGP::UpdateDBAttrs(bgp_msg::UpdateMsg::parsed_attrs_map &attrs,
+                             bgp_msg::UpdateMsg::parsed_data_prefix_sid &attr_prefix_sid) {
 
     /*
      * Setup the record
@@ -447,6 +454,16 @@ void parseBGP::UpdateDBAttrs(bgp_msg::UpdateMsg::parsed_attrs_map &attrs) {
         return;
     }
 
+    base_attr.srv6_sid_value            = attr_prefix_sid.get<std::string>("srv6_l3_service.sid_information.sid_value", "");
+    base_attr.srv6_service_sid_flags    = attr_prefix_sid.get<uint8_t>("srv6_l3_service.sid_information.service_sid_flags", 0);
+    base_attr.srv6_endpoint_behavior    = attr_prefix_sid.get<std::string>("srv6_l3_service.sid_information.endpoint_behavior", "");
+    base_attr.srv6_locator_block_length = attr_prefix_sid.get<uint8_t>("srv6_l3_service.sid_information.sid_structure.locator_block_length", 0);
+    base_attr.srv6_locator_node_length  = attr_prefix_sid.get<uint8_t>("srv6_l3_service.sid_information.sid_structure.locator_node_length", 0);
+    base_attr.srv6_function_length      = attr_prefix_sid.get<uint8_t>("srv6_l3_service.sid_information.sid_structure.function_length", 0);
+    base_attr.srv6_argument_length      = attr_prefix_sid.get<uint8_t>("srv6_l3_service.sid_information.sid_structureargument_length.", 0);
+    base_attr.srv6_transposition_length = attr_prefix_sid.get<uint8_t>("srv6_l3_service.sid_information.sid_structure.transposition_length", 0);
+    base_attr.srv6_transposition_offset = attr_prefix_sid.get<uint8_t>("srv6_l3_service.sid_information.sid_structure.transposition_offset", 0);
+
     SELF_DEBUG("%s: adding attributes to message bus", p_entry->peer_addr);
 
     // Update the DB entry
@@ -464,13 +481,40 @@ void parseBGP::UpdateDBAttrs(bgp_msg::UpdateMsg::parsed_attrs_map &attrs) {
  * \param [in] remove          True if the records should be deleted, false if they are to be added/updated
  * \param [in] prefixes        Reference to the list<vpn_tuple> of advertised vpns
  * \param [in] attrs           Reference to the parsed attributes map
+ * \param [in] attr_prefix_sid Reference to the parsed BGP Prefix-SID attribute
  */
 void parseBGP::UpdateDBL3Vpn(bool remove, std::list<bgp::vpn_tuple> &prefixes,
-                             bgp_msg::UpdateMsg::parsed_attrs_map &attrs) {
+                             bgp_msg::UpdateMsg::parsed_attrs_map &attrs,
+                             bgp_msg::UpdateMsg::parsed_data_prefix_sid &attr_prefix_sid) {
     vector<MsgBusInterface::obj_vpn> rib_list;
     MsgBusInterface::obj_vpn         rib_entry;
     uint32_t                         value_32bit;
     uint64_t                         value_64bit;
+    SELF_DEBUG("%s: UpdateDBL3Vpn", p_entry->peer_addr);
+    uint8_t srv6_transposition_length = 0;
+    uint8_t srv6_transposition_offset = 0;
+    std::string srv6_sid_value("");
+    std::string srv6_sid_next_hop("");
+    //std::string srv6_endpoint_behavior("");
+
+    bool is_srv6_l3vpn = attr_prefix_sid.get_optional<std::string>("srv6_l3_service.sid_information.sid_value")!=boost::none;
+    SELF_DEBUG("%s: is_srv6_l3vpn = %d", p_entry->peer_addr, is_srv6_l3vpn);
+
+    std::ostringstream oss;
+    boost::property_tree::json_parser::write_json(oss, attr_prefix_sid);
+    std::string text = oss.str();;
+    
+    SELF_DEBUG("%s: Prefix-SID Attr = %s", p_entry->peer_addr, text.c_str());
+
+    if (is_srv6_l3vpn) {
+        SELF_DEBUG("%s: SRv6 L3VPN", p_entry->peer_addr);
+        srv6_transposition_length = attr_prefix_sid.get<uint8_t>("srv6_l3_service.sid_information.sid_structure.transposition_length");
+        srv6_transposition_offset = attr_prefix_sid.get<uint8_t>("srv6_l3_service.sid_information.sid_structure.transposition_offset");
+        srv6_sid_value            = attr_prefix_sid.get<std::string>("srv6_l3_service.sid_information.sid_value");
+        //srv6_endpoint_behavior    = attr_prefix_sid.get<std::string>("srv6_l3_service.sid_information.endpoint_behavior");
+        if(srv6_transposition_length>20) srv6_transposition_length = 20;
+        if(srv6_transposition_offset+srv6_transposition_length>128) srv6_transposition_offset = 128-srv6_transposition_length;
+    }
 
     /*
      * Loop through all vpn and add/update them in the DB
@@ -488,6 +532,7 @@ void parseBGP::UpdateDBL3Vpn(bool remove, std::list<bgp::vpn_tuple> &prefixes,
         rib_entry.rd_administrator_subfield = tuple.rd_administrator_subfield;
 
         strncpy(rib_entry.prefix, tuple.prefix.c_str(), sizeof(rib_entry.prefix));
+        SELF_DEBUG("%s: prefix=%s", p_entry->peer_addr, tuple.prefix.c_str());
         
         rib_entry.prefix_len = tuple.len;
 
@@ -543,6 +588,28 @@ void parseBGP::UpdateDBL3Vpn(bool remove, std::list<bgp::vpn_tuple> &prefixes,
 
         rib_entry.path_id = tuple.path_id;
         snprintf(rib_entry.labels, sizeof(rib_entry.labels), "%s", tuple.labels.c_str());
+
+        if (is_srv6_l3vpn) {
+            SELF_DEBUG("%s: is_srv6_l3vpn", p_entry->peer_addr);
+            // Get first label
+            uint32_t label = std::stoi(tuple.labels.substr(0, tuple.labels.find(',')));
+            struct in6_addr srv6_sid;
+            inet_pton(AF_INET6, srv6_sid_value.c_str(), &srv6_sid);
+            // restore transposed bits
+            for (uint8_t i=0; i<srv6_transposition_length; i++) {
+                uint8_t j = srv6_transposition_offset + i;
+                if (label & 0x1 << (19-i)) {
+                    srv6_sid.s6_addr[j/8] |= (0x1 << (7-j%8));
+                }
+            }
+            char srv6_sid_next_hop_cstr[40];
+            inet_ntop(AF_INET6, &srv6_sid, srv6_sid_next_hop_cstr, sizeof(srv6_sid_next_hop_cstr));
+            srv6_sid_next_hop.assign(srv6_sid_next_hop_cstr);
+            SELF_DEBUG("%s: sid_value=%s label=%d  -> sid_next_hop=%s", p_entry->peer_addr, 
+                   srv6_sid_value.c_str(), label, srv6_sid_next_hop.c_str());
+            //rib_entry.srv6_endpoint_behavior = srv6_endpoint_behavior;
+        }
+        rib_entry.srv6_sid_next_hop = srv6_sid_next_hop;
 
         SELF_DEBUG("%s: %s vpn=%s len=%d", p_entry->peer_addr, remove ? "removing" : "adding",
                    rib_entry.prefix, rib_entry.prefix_len);
@@ -936,7 +1003,6 @@ void parseBGP::UpdateDbBgpLs(bool remove, bgp_msg::UpdateMsg::parsed_data_ls ls_
     ls_data.links.clear();
     ls_data.nodes.clear();
 }
-
 
 void parseBGP::enableDebug() {
     debug = true;
